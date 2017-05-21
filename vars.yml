@@ -6,6 +6,4 @@ rhn_pool_name: "{{ vault_rhn_pool_name }}"
 # Red Hat repositories required for undercloud install
 rhn_repo_channels:
   - rhel-7-server-rpms
-#  - rhel-7-server-extras-rpms
-#  - rhel-7-server-rh-common-rpms
 hostname: lamp.example.com
