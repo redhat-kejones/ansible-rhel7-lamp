@@ -1,5 +1,5 @@
 #Playbook for configuring and installing LAMP on RHEL 7
-- hosts: lamp.example.com
+- hosts: lamp
   name: playbook to complete LAMP configuration and installation
   remote_user: root
   vars_files:
