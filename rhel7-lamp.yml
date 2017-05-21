@@ -1,0 +1,147 @@
+#Playbook for configuring and installing LAMP on RHEL 7
+- hosts: lamp.example.com
+  name: playbook to complete LAMP configuration and installation
+  remote_user: root
+  vars_files:
+    - vars.yml
+    - vault
+  tasks:
+    - name: import secret variable file
+      include_vars: "vault"
+      no_log: true
+    
+    - name: set hostname
+      hostname:
+        name: "{{ hostname }}"
+    
+    - name: register System with RHN Subscription Manager
+      redhat_subscription:
+        state: present
+        username: "{{ rhn_user }}"
+        password: "{{ rhn_pwd }}"
+        pool: "{{ rhn_pool_name }}"
+      when: ansible_distribution == 'RedHat' and {{ rhn_register }} == true
+    
+    - name: test to see if selinux is running
+      command: getenforce
+      register: sestatus
+      changed_when: false
+    
+    - name: disable all repositories
+      command: subscription-manager repos --disable=\*
+      when: ansible_distribution == 'RedHat' and {{ rhn_register }} == true
+    
+    - name: enable the needed rhel repositories
+      command: subscription-manager repos --enable={{ item }}
+      with_items: "{{ rhn_repo_channels }}"
+      when: ansible_distribution == 'RedHat' and {{ rhn_register }} == true
+    
+    - name: install lamp packages
+      yum:
+        name: "{{ item }}"
+        state: latest
+      with_items:
+        - 'httpd'
+        - 'mariadb-server'
+        - 'mariadb'
+        - 'php'
+        - 'php-mysql'
+        - 'php-gd'
+        - 'php-pear'
+        - 'firewalld'
+    
+    - name: update packages
+      yum:
+        name: '*'
+        state: latest
+      register: yum_result
+      async: 1000
+      poll: 30
+    
+    - name: Create a new PHP info file
+      file: path="/var/www/html/info.php" state=touch
+    
+    - name: Check that new PHP info file exists
+      stat: path="/var/www/html/info.php"
+      register: file_path
+    
+    - name: Add content to PHP info file
+      copy: content="<?php phpinfo(); ?>" dest="/var/www/html/info.php"
+      when: file_path.stat.exists == true
+    
+    - name: enable service httpd and ensure it is not masked
+      systemd:
+        name: httpd
+        enabled: yes
+        masked: no
+    
+    - name: enable service mariadb and ensure it is not masked
+      systemd:
+        name: mariadb
+        enabled: yes
+        masked: no
+
+    - name: enable service firewalld and ensure it is not masked
+      systemd:
+        name: firewalld
+        enabled: yes
+        masked: no
+    
+    - name: Make sure httpd service is running
+      systemd: state=started name=httpd
+    
+    - name: Make sure mariadb is running
+      systemd: state=started name=mariadb
+    
+    - name: Make sure firewalld is running
+      systemd: state=started name=firewalld
+
+    - name: Add ssh service to firewalld config
+      firewalld:
+        service: ssh
+        permanent: true
+        state: enabled
+
+    - name: Add http service to firewalld config
+      firewalld:
+        service: http
+        permanent: true
+        state: enabled
+
+    - name: Add https service to firewalld config
+      firewalld:
+        service: https
+        permanent: true
+        state: enabled
+
+    - name: restart firewalld
+      service: name=firewalld state=restarted
+
+    - name: check Kernel is the latest
+      shell: if [ $(uname -r) == $(rpm -q kernel | tail -n 1 | sed -e 's/kernel-//g') ] ; then echo no ; else echo reboot; fi
+      ignore_errors: true
+      register: reboot_hint
+    
+    - name: make sure cloud-init is not installed
+      yum:
+        name: cloud-init
+        state: absent
+    
+    - name: restart lamp machine to get updated kernel
+      shell: sleep 2 && shutdown -r now "Ansible Restart Triggered for LAMP Install"
+      async: 1
+      poll: 0
+      ignore_errors: true
+      when: yum_result.changed or reboot_hint.stdout.find("reboot") != -1
+    
+    - name: waiting for server to come back
+      wait_for:
+        host: "{{ inventory_hostname }}"
+        state: started
+        delay: 10
+        connect_timeout: 5
+        timeout: 300
+        port: 22
+      delegate_to: 127.0.0.1
+      become: false
+      ignore_errors: true
