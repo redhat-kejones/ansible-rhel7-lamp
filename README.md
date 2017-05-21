@@ -20,6 +20,6 @@ Ansible Playbook to install and configure LAMP on a pre-provisioned RHEL 7 host
    `$ ansible-playbook --ask-vault-pass -i hosts rhel7-lamp.yml`
 
 # Vault Vars
-vault_rhn_user: Red Hat Network Account Username
-vault_rhn_pwd: Red Hat Network Account Password
+vault_rhn_user: Red Hat Network Account Username  
+vault_rhn_pwd: Red Hat Network Account Password  
 vault_rhn_pool_name: Subscription Manager pool name to attach to
